@@ -14,6 +14,9 @@ import {
   getBibleVerseURLTool,
   handleScriptureTools,
 } from './tools/scripture-tools.js';
+import { researchTools, handleResearchTools } from './tools/research-tools.js';
+import { researchGuideTool, handleResearchGuideTool } from './tools/research-guide-tool.js';
+import { medicalLibraryTool, handleMedicalLibraryTool } from './tools/medical-library-tool.js';
 
 const { version: SERVER_VERSION } = createRequire(import.meta.url)('../package.json');
 
@@ -25,6 +28,9 @@ const allTools = [
   getBibleVerseTool,
   getVerseWithStudyTool,
   getBibleVerseURLTool,
+  ...researchTools,
+  researchGuideTool,
+  medicalLibraryTool,
 ];
 
 const toolHandlers = [
@@ -32,6 +38,9 @@ const toolHandlers = [
   handleWorkbookTools,
   handleWatchtowerTools,
   handleScriptureTools,
+  handleResearchTools,
+  handleResearchGuideTool,
+  handleMedicalLibraryTool,
 ];
 
 export function createMcpServer(requestId = 'default') {

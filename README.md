@@ -210,6 +210,49 @@ Also accepts full JW.org URLs — the video ID is extracted automatically.
 
 ---
 
+### Research Tools
+
+Ported to plain JavaScript from [prreobby/jw-research-mcp](https://github.com/prreobby/jw-research-mcp) (MIT). Most accept `format: "markdown"` for readable output with source links, or `json` (the default).
+
+| Tool | What it does |
+|---|---|
+| `get_footnotes` | Study Bible footnotes for one verse (`book`, `chapter`, `verse`) |
+| `get_cross_references` | Marginal cross-references for one verse, with the full text of each referenced verse |
+| `get_article_full` | A whole WOL article with numbered paragraphs and a source link for each |
+| `get_article_media` | Images from a WOL article with captions and links, paginated |
+| `get_related_content` | Subheadings and WOL "similar material" for an article |
+| `get_publication_toc` | Table of contents for a publication code (for example `lff`, `it`) |
+| `get_book_content` | Up to 3 chapters of a publication, paginated by paragraph |
+| `search_wol_library` | Search WOL and return results with excerpts and links |
+| `search_wol_media` | Find publication images on a topic |
+| `get_daily_text` | Daily text for a date (`YYYY-MM-DD`, defaults to today) |
+
+#### `search_research_guide`
+Look up a subject in the **Research Guide** and the **Watch Tower Publications Index 1986-present**. Returns the best-matching topics and every reference listed for the top match, with citations (for example `w07 11/15 p. 13`) and direct links.
+
+```json
+{ "topic": "Baptism", "source": "both", "format": "markdown" }
+```
+
+- `source`: `research_guide`, `index`, or `both` (default)
+- `topic_url`: open an exact topic from an earlier result
+- `include_references: false` lists matching topics only
+- The Index is English only and is matched by the topic's first letter, so use the main subject name
+
+#### `get_medical_library`
+Browse and search the [JW.ORG Medical Library](https://www.jw.org/en/medical-library/): citations of peer-reviewed journal articles on clinical strategies that avoid blood transfusion.
+
+```json
+{ "path": "bloodless-surgery-medicine/cardio/cardio-Hemost/", "query": "tranexamic" }
+```
+
+- No arguments: the home page with featured articles and the main sections
+- `path`: a section, specialty, or strategy page from an earlier result
+- `query`: filter citations by title, authors, journal, or subheading
+- `search: true`: walk every page below `path` and collect matching citations. Start from a specialty such as `bloodless-surgery-medicine/cardio/`, since the whole library is hundreds of pages. `max_pages` defaults to 40.
+
+---
+
 ## Troubleshooting
 
 1. **"Could not read package.json"** — Use absolute path in Claude Desktop config
