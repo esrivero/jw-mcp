@@ -106,6 +106,73 @@ function markerAwareMarkdown($, element, sourceUrl) {
   });
   return text(clone.text());
 }
+// Charts in some publications (for example the prophecy charts in "All Scripture Is Inspired
+// of God and Beneficial") are fixed-width text: p.sc / p.se lines whose columns are lined up
+// with runs of spaces. Collapsing whitespace there scrambles the columns, so these lines keep
+// their spacing, and citations keep their printed text so the columns stay aligned.
+function isChartLine($, element) {
+  const tag = element.tagName?.toLowerCase();
+  return tag === 'p' && ($(element).hasClass('sc') || $(element).hasClass('se'));
+}
+function spacedText(value) {
+  return value
+    .replace(/\u00a0/g, ' ')
+    .replace(/[\t\r\n]+/g, ' ')
+    .replace(/\s+$/, '');
+}
+function chartLineText($, element) {
+  const clone = $(element).clone();
+  clone.find('.pageNum, .parNum').remove();
+  clone.find('a.fn').each((_index, marker) => {
+    const id = $(marker).attr('data-fnid') || '*';
+    $(marker).replaceWith(`[fn:${id}]`);
+  });
+  return spacedText(clone.text());
+}
+function chartLineMarkdown($, element, sourceUrl) {
+  const clone = $(element).clone();
+  clone.find('.pageNum, .parNum').remove();
+  clone.find('a[href]').each((_index, anchor) => {
+    const href = $(anchor).attr('href');
+    const anchorText = $(anchor).text();
+    if (!href || !text(anchorText)) {
+      $(anchor).replaceWith(anchorText);
+      return;
+    }
+    const lead = anchorText.match(/^[\s\u00a0]*/)[0];
+    $(anchor).replaceWith(
+      `${lead}[${markdownLabel(text(anchorText))}](${absoluteArticleUrl(href, sourceUrl)})`,
+    );
+  });
+  return spacedText(clone.text());
+}
+// Real HTML tables (for example the Insight "Weights and Measures" charts) put each cell in
+// its own paragraph. Return one entry per row so the cells stay together.
+function tableRows($, table, sourceUrl) {
+  return $(table)
+    .find('tr')
+    .filter((_index, row) => $(row).closest('table').get(0) === table)
+    .map((_index, row) => {
+      const cellElements = $(row).children('th, td').get();
+      const cells = cellElements.map((cell) => markerAwareText($, cell));
+      if (!cells.some(Boolean)) return null;
+      const markdownCells = cellElements.map((cell) =>
+        markerAwareMarkdown($, cell, sourceUrl).replace(/\|/g, '\\|'),
+      );
+      const first = $(row).find('[data-pid]').first();
+      const sourcePid = first.attr('data-pid');
+      return {
+        sourcePid,
+        elementId: first.attr('id') || (sourcePid ? `p${sourcePid}` : undefined),
+        cells,
+        text: cells.join(' | '),
+        markdown: `| ${markdownCells.join(' | ')} |`,
+        links: paragraphLinks($, row, sourceUrl),
+      };
+    })
+    .get()
+    .filter(Boolean);
+}
 function parseArticleMediaHtml(html, sourceUrl) {
   const $ = cheerio.load(html);
   const article = $('#article');
@@ -185,25 +252,94 @@ function parseArticleHtml(html, sourceUrl) {
   const citation = text($('#documentCitationInformation').text());
   const paragraphs = [];
   const seen = new Set();
-  article.find('[data-pid]').each((_index, element) => {
-    const tag = element.tagName?.toLowerCase();
-    if (!tag || !['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'li'].includes(tag)) return;
-    if ($(element).parents('[data-pid]').length > 0) return;
-    const sourcePid = $(element).attr('data-pid') || String(paragraphs.length + 1);
-    const body = markerAwareText($, element);
+  const doneTables = new Set();
+  const push = (sourcePid, elementId, body, markdown, links, extra = {}) => {
     if (!body) return;
     const dedupeKey = `${sourcePid}:${body}`;
     if (seen.has(dedupeKey)) return;
     seen.add(dedupeKey);
-    const elementId = $(element).attr('id') || `p${sourcePid}`;
     paragraphs.push({
       paragraph: paragraphs.length + 1,
       source_pid: sourcePid,
-      source_url: sourceAnchor(sourceUrl, elementId),
+      source_url: sourceAnchor(sourceUrl, elementId || `p${sourcePid}`),
+      ...extra,
       text: body,
-      markdown: markerAwareMarkdown($, element, sourceUrl),
-      links: paragraphLinks($, element, sourceUrl),
+      markdown,
+      links,
     });
+  };
+  article.find('[data-pid], table').each((_index, element) => {
+    const tag = element.tagName?.toLowerCase();
+    if (tag === 'table') {
+      if (doneTables.has(element) || $(element).parents('table').length > 0) return;
+      doneTables.add(element);
+      tableRows($, element, sourceUrl).forEach((row) =>
+        push(
+          row.sourcePid || String(paragraphs.length + 1),
+          row.elementId,
+          row.text,
+          row.markdown,
+          row.links,
+          {
+            kind: 'table_row',
+            cells: row.cells,
+          },
+        ),
+      );
+      return;
+    }
+    if ($(element).parents('table').length > 0) return;
+    if ($(element).parents('[data-pid]').length > 0) return;
+    const sourcePid = $(element).attr('data-pid') || String(paragraphs.length + 1);
+    const elementId = $(element).attr('id') || `p${sourcePid}`;
+    if (tag === 'div') {
+      // WOL wraps a multi-line chart row (or other grouped lines) in a div that shares the
+      // data-pid of its child paragraphs. Keep every line, in order, with line breaks.
+      const lines = $(element)
+        .children('p, li')
+        .get()
+        .filter((line) => !$(line).attr('data-pid') || $(line).attr('data-pid') === sourcePid);
+      if (!lines.length) return;
+      const chart = lines.some((line) => isChartLine($, line));
+      const body = lines
+        .map((line) => (chart ? chartLineText($, line) : markerAwareText($, line)))
+        .filter((line) => line.trim())
+        .join('\n');
+      const markdown = lines
+        .map((line) =>
+          chart ? chartLineMarkdown($, line, sourceUrl) : markerAwareMarkdown($, line, sourceUrl),
+        )
+        .filter((line) => line.trim())
+        .join('\n');
+      push(
+        sourcePid,
+        elementId,
+        body,
+        markdown,
+        paragraphLinks($, element, sourceUrl),
+        chart ? { kind: 'chart' } : {},
+      );
+      return;
+    }
+    if (!tag || !['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'li'].includes(tag)) return;
+    if (isChartLine($, element)) {
+      push(
+        sourcePid,
+        elementId,
+        chartLineText($, element),
+        chartLineMarkdown($, element, sourceUrl),
+        paragraphLinks($, element, sourceUrl),
+        { kind: 'chart' },
+      );
+      return;
+    }
+    push(
+      sourcePid,
+      elementId,
+      markerAwareText($, element),
+      markerAwareMarkdown($, element, sourceUrl),
+      paragraphLinks($, element, sourceUrl),
+    );
   });
   const footnotes2 = article
     .find('li.item.footnote')
@@ -862,7 +998,7 @@ const researchTools = [
   {
     name: 'get_article_full',
     description:
-      'Get a complete WOL article with numbered paragraphs, exact paragraph source URLs, clickable inline references, images, and related material.',
+      'Get a complete WOL article with numbered paragraphs, exact paragraph source URLs, clickable inline references, images, and related material. Fixed-width charts keep their line layout (kind "chart"), and HTML table rows come through one per paragraph with their cells (kind "table_row").',
     inputSchema: {
       type: 'object',
       properties: {
