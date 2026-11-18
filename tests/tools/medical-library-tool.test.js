@@ -171,6 +171,46 @@ test('search respects max_pages and reports what it skipped', async () => {
   assert.equal(data.pages_not_scanned, 2);
 });
 
+test('search markdown prints each subheading once and names the limit that stopped it', async () => {
+  const pages = {
+    [CARDIO]: fixture('medlib-specialty-cardio.html'),
+    [HEMOST]: fixture('medlib-strategy-hemost.html'),
+    [EVAL]: fixture('medlib-strategy-hemost.html'),
+  };
+  const call = async (args) => {
+    setFetchForTesting(fakeSite(pages));
+    const response = await handleMedicalLibraryTool({
+      params: { name: 'get_medical_library', arguments: { path: CARDIO, search: true, format: 'markdown', ...args } },
+    });
+    return response.content[0].text;
+  };
+
+  // Both "Antifibrinolytic Agents" citations match "a", and the heading appears once.
+  const grouped = await call({ query: 'a', max_results: 50 });
+  assert.equal(grouped.match(/### Antifibrinolytic Agents/g).length, 1);
+  assert.doesNotMatch(grouped, /^_Antifibrinolytic Agents_$/m);
+
+  // Stopped by max_results: the hint says to raise max_results.
+  const byResults = await call({ query: 'a', max_results: 1 });
+  assert.match(byResults, /Stopped after 1 citations\. Raise max_results/);
+  assert.doesNotMatch(byResults, /Raise max_pages/);
+  assert.equal(byResults.match(/^- \[/gm).length, 1, 'exactly max_results citations');
+
+  // Stopped by max_pages: the hint says to raise max_pages.
+  const byPages = await call({ query: 'zzz', max_pages: 1 });
+  assert.match(byPages, /Raise max_pages/);
+});
+
+test('search JSON reports which limit stopped it', async () => {
+  setFetchForTesting(
+    fakeSite({ [CARDIO]: fixture('medlib-specialty-cardio.html'), [HEMOST]: fixture('medlib-strategy-hemost.html') })
+  );
+  const response = await handleMedicalLibraryTool({
+    params: { name: 'get_medical_library', arguments: { path: CARDIO, query: 'a', search: true, max_results: 1 } },
+  });
+  assert.equal(JSON.parse(response.content[0].text).stopped_by, 'max_results');
+});
+
 test('markdown output groups citations under their subheadings', async () => {
   setFetchForTesting(fakeSite({ [HEMOST]: fixture('medlib-strategy-hemost.html') }));
   const response = await handleMedicalLibraryTool({
