@@ -26,8 +26,16 @@ src/
     ├── bible-books.js        # Bible book utilities & data
     ├── wol-scraper.js        # Web scraper for wol.jw.org
     ├── rtf-parser.js         # RTF to plain text converter
-    └── rtf-utils.js          # Shared HTTP utilities
+    ├── rtf-utils.js          # Shared HTTP utilities
+    ├── research-tools.js     # 10 WOL research tools (ported from prreobby/jw-research-mcp)
+    ├── research-guide-tool.js # search_research_guide (Research Guide + Publications Index)
+    ├── medical-library-tool.js # get_medical_library (jw.org/en/medical-library)
+    ├── fetch-cache.js        # Cached fetch with WOL bot-challenge detection, mapLimit
+    ├── tool-response.js      # json/markdown tool response helpers
+    └── wol-language.js       # langwritten -> WOL locale/region/library
 ```
+
+Tests for the research, Research Guide, and Medical Library tools live in `tests/tools/`, with trimmed real HTML in `tests/tools/fixtures/`. Use `setFetchForTesting()` from `fetch-cache.js` to fake the network.
 
 ## Tool Structure Pattern
 
