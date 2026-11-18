@@ -218,7 +218,7 @@ Ported to plain JavaScript from [prreobby/jw-research-mcp](https://github.com/pr
 |---|---|
 | `get_footnotes` | Study Bible footnotes for one verse (`book`, `chapter`, `verse`) |
 | `get_cross_references` | Marginal cross-references for one verse, with the full text of each referenced verse |
-| `get_article_full` | A whole WOL article with numbered paragraphs and a source link for each |
+| `get_article_full` | A whole WOL article with numbered paragraphs and a source link for each. Charts keep their line layout and table rows keep their cells |
 | `get_article_media` | Images from a WOL article with captions and links, paginated |
 | `get_related_content` | Subheadings and WOL "similar material" for an article |
 | `get_publication_toc` | Table of contents for a publication code (for example `lff`, `it`) |
