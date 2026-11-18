@@ -252,11 +252,12 @@ async function crawl(startUrl, words, maxPages, maxResults) {
     for (const page of parsed) {
       if (!page) continue;
       for (const citation of page.citations) {
+        // Checked per citation, not per page: a batch fetches several pages at once.
+        if (results.length >= maxResults) break;
         const key = citation.url || `${citation.title}|${citation.source}`;
         if (seenCitations.has(key) || !matchesQuery(citation, words)) continue;
         seenCitations.add(key);
         results.push({ ...citation, page_title: page.title, page_url: page.url });
-        if (results.length >= maxResults) break;
       }
       for (const child of page.pages) {
         const childUrl = child.parent_url || child.url.split('#')[0];
@@ -380,22 +381,33 @@ export async function medicalLibraryImplementation(args = {}) {
       citations: found.results,
     };
     if (found.failures.length) data.failures = found.failures;
+    // Say which limit stopped the search, so the hint points at the right setting.
+    const hitResultLimit = found.results.length >= maxResults;
+    if (hitResultLimit) data.stopped_by = 'max_results';
+    else if (found.pages_remaining) data.stopped_by = 'max_pages';
     const lines = [
       `# Medical Library search: ${args.query}`,
       `Scanned ${found.pages_scanned} pages from ${url}`,
     ];
-    if (found.pages_remaining) {
+    if (hitResultLimit) {
+      lines.push(`_Stopped after ${maxResults} citations. Raise max_results to see more._`);
+    } else if (found.pages_remaining) {
       lines.push(
         `_${found.pages_remaining} more pages were not scanned. Raise max_pages or start from a narrower path._`,
       );
     }
     let lastPage = null;
+    let lastSection = null;
     for (const c of found.results) {
       if (c.page_url !== lastPage) {
         lastPage = c.page_url;
+        lastSection = null;
         lines.push('', `## [${c.page_title}](${c.page_url})`);
       }
-      if (c.section) lines.push(`_${c.section}_`);
+      if ((c.section || '') !== (lastSection || '')) {
+        lastSection = c.section || '';
+        if (lastSection) lines.push('', `### ${lastSection}`);
+      }
       lines.push(citationMarkdown(c));
     }
     if (!found.results.length) lines.push('', '_No matching citations._');
